@@ -1,0 +1,67 @@
+import tensorflow as tf
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+from IPython.display import HTML
+
+def get_word_embeddings(text, tokenizer, embedding_model):
+    # Tokenizar el texto y obtener los embeddings de palabras
+    tokens = tokenizer.texts_to_sequences([text])
+    # Asegurarse de que la secuencia tenga una longitud de 500 (ajusta según sea necesario)
+    padded_tokens = tf.keras.preprocessing.sequence.pad_sequences(tokens, maxlen=500, padding='post', truncating='post')
+    embeddings = embedding_model.predict(padded_tokens)
+    return embeddings
+
+def highlight_word_in_paragraph(word, paragraph):
+    # Resaltar la palabra en el párrafo usando HTML, convirtiéndola a mayúsculas y subrayándola
+    highlighted_paragraph = paragraph.replace(word, f"<u><b>{word.upper()}</b></u>")
+    return highlighted_paragraph
+
+def search_similar_words(query, paragraph, tokenizer, embedding_model):
+    # Tokenizar el texto
+    tokens = tokenizer.texts_to_sequences([paragraph])
+    # Asegurarse de que la secuencia tenga una longitud de 500 (ajusta según sea necesario)
+    padded_tokens = tf.keras.preprocessing.sequence.pad_sequences(tokens, maxlen=500, padding='post', truncating='post')
+
+    # Obtener los embeddings de palabras para el párrafo completo
+    paragraph_embedding = embedding_model.predict(padded_tokens)
+
+    # Calcular la similitud de coseno entre la consulta y cada palabra del párrafo
+    similarities = cosine_similarity(embedding_model.get_weights()[0], paragraph_embedding.reshape(-1, 1).T)
+
+    # Obtener las palabras del párrafo ordenadas por similitud
+    sorted_words = sorted(zip(similarities[0], paragraph.split()), reverse=True)
+
+    # Contar la frecuencia de la palabra dada en el párrafo
+    query_count = paragraph.lower().split().count(query.lower())
+
+    return sorted_words, query_count
+
+# Interacción con el usuario
+paragraph = input("Ingresa un párrafo de texto: ")
+query = input("Ingresa una palabra para buscar en el párrafo: ")
+
+# Crear un modelo de embeddings de palabras simple (puedes reemplazar esto con tu propio modelo preentrenado)
+embedding_model = tf.keras.Sequential([
+    tf.keras.layers.Embedding(input_dim=10000, output_dim=100, input_length=500),
+    tf.keras.layers.GlobalAveragePooling1D()  # Cambiado a GlobalAveragePooling1D para obtener un único vector por secuencia
+])
+embedding_model.compile(optimizer='adam', loss='mean_squared_error')
+
+# Tokenizar el texto
+tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=10000)
+tokenizer.fit_on_texts([paragraph])
+
+# Realizar la búsqueda de palabras similares y contar su frecuencia
+result, query_count = search_similar_words(query, paragraph, tokenizer, embedding_model)
+
+# Resaltar la palabra en el párrafo
+highlighted_paragraph = highlight_word_in_paragraph(query, paragraph)
+
+# Mostrar el párrafo resaltado y los resultados
+display(HTML(f"<p>{highlighted_paragraph}</p>"))
+
+print(f"\nPalabras similares a '{query}' en el párrafo (ordenadas por similitud):")
+for similarity, word in result:
+    print(f"{word}: Similitud de coseno: {similarity:.4f}")
+
+print(f"\nLa palabra '{query}' aparece {query_count} veces en el párrafo.")
